@@ -7,6 +7,7 @@ import threading
 LPMSG = POINTER(MSG)
 
 user32 = ctypes.WinDLL('user32', use_last_error = True)
+kernel32 = ctypes.WinDLL('kernel32', use_last_error = True)
 
 class MSLLHOOKSTRUCT(Structure):
 	_fields_ = [("x", c_long), ("y", c_long),
@@ -35,14 +36,19 @@ TranslateMessage = user32.TranslateMessage
 TranslateMessage.argtypes = [LPMSG]
 TranslateMessage.restype = BOOL
 
-DispatchMessage = user32.DispatchMessageA
+DispatchMessage = user32.DispatchMessageW
 DispatchMessage.argtypes = [LPMSG]
+
+PostThreadMessage = user32.PostThreadMessageW
+WM_QUIT = 0x0012
+GetCurrentThreadId = kernel32.GetCurrentThreadId
 
 NULL = c_int(0)
 
 class TranslateInjectedMouse(threading.Thread):
 	daemon=True
 	def run(self):
+		self.t_id = GetCurrentThreadId()
 		def low_level_mouse_handler(nCode, wParam, lParam):
 			print("handler")
 			lParam.contents.flags &= 0x11111100
@@ -56,12 +62,13 @@ class TranslateInjectedMouse(threading.Thread):
 		# try/finally block doesn't seem to work here.
 		atexit.register(UnhookWindowsHookEx, self.mouse_hook)
 
-		msg = LPMSG()
-		while not GetMessage(msg, NULL, NULL, NULL):
+		msg = ctypes.wintypes.MSG()
+		while GetMessage(ctypes.byref(msg), NULL, NULL, NULL) != 0:
 			TranslateMessage(msg)
 			DispatchMessage(msg)
 			
 	def stop(self):
+		PostThreadMessage(self.t_id, WM_QUIT, 0, 0)
 		UnhookWindowsHookEx(self.mouse_hook)
 
 if __name__ == '__main__':

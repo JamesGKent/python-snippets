@@ -44,6 +44,8 @@ EVENT_SYSTEM_FOREGROUND = 0x0003
 EVENT_OBJECT_SELECTION = 0x8006
 EVENT_OBJECT_SELECTIONWITHIN = 0x8009
 
+WM_QUIT = 0x0012
+
 def readListViewItems(hwnd, column_index=0):
 	# Allocate virtual memory inside target process
 	pid = ctypes.create_string_buffer(4)
@@ -192,6 +194,7 @@ class App(tk.Tk):
 			self.spmenu.post(event.x_root, event.y_root)
 
 	def msgloop(self):
+		self.t_id = kernel32.GetCurrentThreadId()
 		ole32.CoInitialize(0)
 		
 		self.foregroundEventProc = WinEventProcType(self.foreground_callback)
@@ -223,9 +226,8 @@ class App(tk.Tk):
 			return
 		
 		msg = ctypes.wintypes.MSG()
-		# find way to kill this loop
 		while user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) != 0:
-			user32.TranslateMessageW(msg)
+			user32.TranslateMessage(msg)
 			user32.DispatchMessageW(msg)
 		
 	def foreground_callback(self, hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
@@ -327,6 +329,7 @@ class App(tk.Tk):
 		self.clipboard_append(data)
 		
 	def exit_handler(self):
+		user32.PostThreadMessageA(self.t_id, WM_QUIT, 0, 0)
 		user32.UnhookWinEvent(self.hook1)
 		user32.UnhookWinEvent(self.hook2)
 		ole32.CoUninitialize()
