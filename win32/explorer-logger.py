@@ -140,46 +140,61 @@ class App(tk.Tk):
 		self.title('Explorer Selection and path logger')
 		self.protocol("WM_DELETE_WINDOW", self.exit_handler)
 		
-		self.grid_columnconfigure(1, weight=1)
-		self.grid_columnconfigure(3, weight=1)
-		self.grid_columnconfigure(5, weight=3)
-		self.grid_rowconfigure(3, weight=1)
+		self.grid_columnconfigure(2, weight=1)
+		self.grid_rowconfigure(2, weight=1)
+		
+		self.pw = ttk.PanedWindow(self, 'pane', orient=tk.HORIZONTAL)
+		self.pw.grid(column=1, row=2, columnspan=2, sticky='nesw')
 		
 		tk.Label(self, text='Path:').grid(column=1, row=1, sticky='nesw')
 		self.path = tk.Entry(self)
-		self.path.grid(column=2, row=1, columnspan=5, sticky='nesw')
+		self.path.grid(column=2, row=1, sticky='nesw')
 		
-		tk.Label(self, text='Files:').grid(column=1, row=2, sticky='nesw')
-		self.files = tk.Listbox(self, selectmode=tk.MULTIPLE)
-		self.files.grid(column=1, row=3, sticky='nesw')
-		vsb = ttk.Scrollbar(self, command=self.files.yview)
-		vsb.grid(column=2, row=3, sticky='nesw')
+		f = tk.Frame(self.pw, 'files')
+		f.grid_columnconfigure(1, weight=1)
+		f.grid_rowconfigure(2, weight=1)
+		tk.Label(f, text='Files:').grid(column=1, row=1, sticky='nesw')
+		self.files = tk.Listbox(f, selectmode=tk.MULTIPLE)
+		self.files.grid(column=1, row=2, sticky='nesw')
+		vsb = ttk.Scrollbar(f, command=self.files.yview)
+		vsb.grid(column=2, row=2, sticky='nesw')
 		self.files.configure(yscrollcommand=vsb.set)
 		self.fmenu = tk.Menu(self, tearoff=False)
 		self.fmenu.add_command(label='Copy', command=self.copy_files)
 		self.files.bind('<Button-3>', self.popup)
+		self.pw.add(f)
 		
-		tk.Label(self, text='Selected:').grid(column=3, row=2, sticky='nesw')
-		self.selected = tk.Listbox(self, selectmode=tk.MULTIPLE)
-		self.selected.grid(column=3, row=3, sticky='nesw')
-		vsb = ttk.Scrollbar(self, command=self.selected.yview)
-		vsb.grid(column=4, row=3, sticky='nesw')
+		f = tk.Frame(self.pw, 'selected')
+		f.grid_columnconfigure(1, weight=1)
+		f.grid_rowconfigure(2, weight=1)
+		tk.Label(f, text='Selected:').grid(column=1, row=1, sticky='nesw')
+		self.selected = tk.Listbox(f, selectmode=tk.MULTIPLE)
+		self.selected.grid(column=1, row=2, sticky='nesw')
+		vsb = ttk.Scrollbar(f, command=self.selected.yview)
+		vsb.grid(column=2, row=2, sticky='nesw')
 		self.selected.configure(yscrollcommand=vsb.set)
 		self.smenu = tk.Menu(self, tearoff=False)
 		self.smenu.add_command(label='Copy', command=self.copy_selected)
 		self.selected.bind('<Button-3>', self.popup)
+		self.pw.add(f)
 		
-		tk.Label(self, text='Selected with path:').grid(column=5, row=2, sticky='nesw')
-		self.selectedpaths = tk.Listbox(self, selectmode=tk.MULTIPLE)
-		self.selectedpaths.grid(column=5, row=3, sticky='nesw')
-		vsb = ttk.Scrollbar(self, command=self.selectedpaths.yview)
-		vsb.grid(column=6, row=3, sticky='nesw')
+		f = tk.Frame(self.pw, 'withpath')
+		f.grid_columnconfigure(1, weight=1)
+		f.grid_rowconfigure(2, weight=1)
+		tk.Label(f, text='Selected with path:').grid(column=1, row=1, sticky='nesw')
+		self.selectedpaths = tk.Listbox(f, selectmode=tk.MULTIPLE)
+		self.selectedpaths.grid(column=1, row=2, sticky='nesw')
+		vsb = ttk.Scrollbar(f, command=self.selectedpaths.yview)
+		vsb.grid(column=2, row=2, sticky='nesw')
 		self.selectedpaths.configure(yscrollcommand=vsb.set)
 		self.spmenu = tk.Menu(self, tearoff=False)
 		self.spmenu.add_command(label='Copy', command=self.copy_selectedpaths)
 		self.selectedpaths.bind('<Button-3>', self.popup)
+		self.pw.add(f)
 		
-		ttk.Button(self, text='Copy All', command=self.copy_all).grid(column=1, row=4, columnspan=6, sticky='nesw')
+		ttk.Button(self, text='Copy All', command=self.copy_all).grid(column=1, row=4, columnspan=2, sticky='nesw')
+		
+		self.hwnd = 0
 		
 		t = Thread(target=self.msgloop)
 		t.daemon=True
@@ -225,14 +240,14 @@ class App(tk.Tk):
 			self.path.insert(tk.END, 'SetWinEventHook 2 failed')
 			return
 		
-		msg = ctypes.wintypes.MSG()
+		msg = ctypes.wintypes.MSG();
 		while user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) != 0:
 			user32.TranslateMessage(msg)
 			user32.DispatchMessageW(msg)
 		
 	def foreground_callback(self, hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
 		if (hwnd != 0):
-			if (win32gui.GetClassName(hwnd) == 'CabinetWClass'): # the main explorer window
+			if (win32gui.GetClassName(hwnd) in ['CabinetWClass', 'Progman']): # the main explorer window or desktop
 				self.hwnd = hwnd
 				self.after_idle(self.background_task, hwnd)
 			else:
@@ -244,39 +259,39 @@ class App(tk.Tk):
 		
 	def background_task(self, hwnd):
 		if (hwnd != 0):
-			if (win32gui.GetClassName(hwnd) == 'CabinetWClass'): # the main explorer window
-				children = list(set(searchChildWindows(hwnd)))
-				addr_edit = None
-				file_view = None
-				for child in children:
-					if (win32gui.GetClassName(child) == 'ComboBoxEx32'): # the address bar
-						addr_children = list(set(searchChildWindows(child)))
-						for addr_child in addr_children:
-							if (win32gui.GetClassName(addr_child) == 'Edit'):
-								addr_edit = addr_child
-								break
-						pass
-					elif (win32gui.GetClassName(child) == 'SysListView32'): # the list control within the window that shows the files
-						file_view = child
-				if addr_edit:
-					path = getEditText(addr_edit)
-				else:
-					path = 'Error getting path'
-				print('repr path: %s' % repr(path))
-				self.path.delete(0, tk.END)
-				self.path.insert(tk.END, path)
+			children = list(set(searchChildWindows(hwnd)))
+			addr_edit = None
+			file_view = None
+			for child in children:
+				if (win32gui.GetClassName(child) == 'ComboBoxEx32'): # the address bar
+					addr_children = list(set(searchChildWindows(child)))
+					for addr_child in addr_children:
+						if (win32gui.GetClassName(addr_child) == 'Edit'):
+							addr_edit = addr_child
+							break
+					pass
+				elif (win32gui.GetClassName(child) == 'SysListView32'): # the list control within the window that shows the files
+					file_view = child
+			if addr_edit:
+				path = getEditText(addr_edit)
+			elif win32gui.GetClassName(hwnd) == 'Progman': # get path to desktop
+				path = os.path.join(os.environ['USERPROFILE'], 'Desktop')
+			else:
+				path = 'Error getting path'
+			self.path.delete(0, tk.END)
+			self.path.insert(tk.END, path)
 
-				self.files.delete(0, tk.END)
-				self.selected.delete(0, tk.END)
-				self.selectedpaths.delete(0, tk.END)
-				if file_view:
-					files = [item.decode('utf8') for item in readListViewItems(file_view)]
-					for f in files:
-						self.files.insert(tk.END, f)
-					indexes = getSelectedListViewItems(file_view)
-					for index in indexes:
-						self.selected.insert(tk.END, files[index])
-						self.selectedpaths.insert(tk.END, os.path.join(path, files[index]))
+			self.files.delete(0, tk.END)
+			self.selected.delete(0, tk.END)
+			self.selectedpaths.delete(0, tk.END)
+			if file_view:
+				files = [item.decode('utf8') for item in readListViewItems(file_view)]
+				for f in files:
+					self.files.insert(tk.END, f)
+				indexes = getSelectedListViewItems(file_view)
+				for index in indexes:
+					self.selected.insert(tk.END, files[index])
+					self.selectedpaths.insert(tk.END, os.path.join(path, files[index]))
 
 	def copy_all(self):
 		data = 'path,%s\nfiles,selected,selected with path\n' % self.path.get()
