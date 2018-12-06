@@ -13,6 +13,11 @@ import time
 import win32api
 from win32con import PAGE_READWRITE, MEM_COMMIT, MEM_RESERVE, MEM_RELEASE, PROCESS_ALL_ACCESS, WM_GETTEXTLENGTH, WM_GETTEXT
 import win32gui
+import win32com.client as win32
+import urllib.parse
+
+# class ID for explorer window
+clsid = '{9BA05972-F6A8-11CF-A442-00A0C90A8F39}'
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -269,7 +274,12 @@ class App(tk.Tk):
 						if (win32gui.GetClassName(addr_child) == 'Edit'):
 							addr_edit = addr_child
 							break
-					pass
+						elif (win32gui.GetClassName(addr_child) == 'ComboBox'): # the address bar
+							addr_children2 = list(set(searchChildWindows(addr_child)))
+							for addr_child2 in addr_children2:
+								if (win32gui.GetClassName(addr_child2) == 'Edit'):
+									addr_edit = addr_child2
+									break
 				elif (win32gui.GetClassName(child) == 'SysListView32'): # the list control within the window that shows the files
 					file_view = child
 			if addr_edit:
@@ -285,6 +295,7 @@ class App(tk.Tk):
 			self.selected.delete(0, tk.END)
 			self.selectedpaths.delete(0, tk.END)
 			if file_view:
+				print('got file view')
 				files = [item.decode('utf8') for item in readListViewItems(file_view)]
 				for f in files:
 					self.files.insert(tk.END, f)
@@ -292,6 +303,18 @@ class App(tk.Tk):
 				for index in indexes:
 					self.selected.insert(tk.END, files[index])
 					self.selectedpaths.insert(tk.END, os.path.join(path, files[index]))
+			else:
+				shellwindows = win32.Dispatch(clsid)
+				for window in range(shellwindows.Count):
+					window_URL = urllib.parse.unquote(shellwindows[window].LocationURL,encoding='ISO 8859-1')
+					try:
+						window_dir = window_URL.split(r'///')[1].replace("/", "\\")
+						if window_dir == path:
+							selected_files = shellwindows[window].Document.SelectedItems()
+							for file in range(selected_files.Count):
+								self.selected.insert(tk.END, selected_files.Item(file).Path)
+					except IndexError: # is probably an IE window
+						pass
 
 	def copy_all(self):
 		data = 'path,%s\nfiles,selected,selected with path\n' % self.path.get()
