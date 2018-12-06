@@ -1,5 +1,3 @@
-#!python3
-
 import sys, os, shutil, platform
 from cx_Freeze import setup, Executable
 
@@ -8,10 +6,14 @@ setup(
 	executables = [
 		Executable(
 			'Console.py',
-			base='Win32GUI',
+			base=None,
 			),
 		Executable(
-			'test.py',
+			'output_test.py',
+			base=None,
+			),
+		Executable(
+			'bidirectional_test.py',
 			base=None,
 			)
 		]
